@@ -1,0 +1,155 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #faf8ef;
+    color: #776e65;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 500px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.header {
+    text-align: center;
+    width: 100%;
+}
+
+.header h1 {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    color: #776e65;
+}
+
+.stats {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.stat {
+    text-align: center;
+    padding: 10px 15px;
+    background: #bbada0;
+    border-radius: 6px;
+    min-width: 100px;
+}
+
+.label {
+    display: block;
+    font-size: 0.8rem;
+    color: #eee4da;
+    margin-bottom: 4px;
+}
+
+.value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: white;
+}
+
+.board {
+    position: relative;
+    width: min(92vw, 450px);
+    aspect-ratio: 1/1;
+    background: #bbada0;
+    border-radius: 6px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.cell {
+    border-radius: 3px;
+    background: rgba(238, 228, 218, 0.35);
+}
+
+.tiles {
+    position: absolute;
+    inset: 10px;
+    pointer-events: none;
+}
+
+.tile {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border-radius: 3px;
+    font-weight: 800;
+    color: #776e65;
+    transform: translate(var(--x, 0px), var(--y, 0px));
+    transition: transform 0.1s ease;
+    font-size: 1.4rem;
+}
+
+.tile.v2 { background: #eee4da; }
+.tile.v4 { background: #ede0c8; }
+.tile.v8 { background: #f2b179; color: white; }
+.tile.v16 { background: #f59563; color: white; }
+.tile.v32 { background: #f67c5f; color: white; }
+.tile.v64 { background: #f65e3b; color: white; }
+.tile.v128 { background: #edcf72; color: white; font-size: 1.2rem; }
+.tile.v256 { background: #edcc61; color: white; font-size: 1.2rem; }
+.tile.v512 { background: #edc850; color: white; font-size: 1.2rem; }
+.tile.v1024 { background: #edc53f; color: white; font-size: 1rem; }
+.tile.v2048 { background: #edc22e; color: white; font-size: 1rem; }
+
+.controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: #8f7a66;
+    color: white;
+}
+
+.btn-secondary {
+    background: #bbada0;
+    color: white;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+    .header h1 {
+        font-size: 2.5rem;
+    }
+    
+    .stats {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .board {
+        width: 95vw;
+    }
+}
