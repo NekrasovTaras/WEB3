@@ -1,11 +1,13 @@
 const SIZE = 4;
-const KEY_BEST = "2048-best";
-const KEY_STATE = "2048-game-state";
+const KEY_BEST = "flower-field-best";
+const KEY_LEADERS = "flower-field-leaders";
+const KEY_STATE = "flower-field-game-state";
 
 function el(tag, props = {}, ...children) {
     const node = document.createElement(tag);
     for (const [k, v] of Object.entries(props)) {
         if (k === "className") node.className = v;
+        else if (k === "text") node.textContent = v;
         else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
         else node.setAttribute(k, v);
     }
@@ -20,18 +22,20 @@ function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-class Game2048 {
+class FlowerFieldGame {
     constructor() {
         this.board = this.makeEmptyBoard();
         this.score = 0;
         this.best = Number(localStorage.getItem(KEY_BEST) || 0);
         this.undoStack = [];
+        this.animating = false;
         
         this.tileDom = new Map();
         
         this.initializeElements();
         this.setupEventListeners();
         this.loadGameState() || this.newGame();
+        this.renderLeaders();
     }
     
     initializeElements() {
@@ -39,18 +43,39 @@ class Game2048 {
         this.tilesLayer = document.getElementById("tiles");
         this.btnNew = document.getElementById("new-game");
         this.btnUndo = document.getElementById("undo");
+        this.btnShowLeaders = document.getElementById("show-leaders");
         this.scoreEl = document.getElementById("score");
         this.bestEl = document.getElementById("best");
+        
+        this.gameOverModal = document.getElementById("game-over");
+        this.finalScoreEl = document.getElementById("final-score");
+        this.nameForm = document.getElementById("name-form");
+        this.playerNameInput = document.getElementById("player-name");
+        this.saveSuccess = document.getElementById("save-success");
+        this.restartBtn = document.getElementById("restart");
+        
+        this.leadersModal = document.getElementById("leaders-modal");
+        this.closeLeaders = document.getElementById("close-leaders");
+        this.closeLeadersBtn = document.getElementById("close-leaders-btn");
+        this.leadersTable = document.querySelector("#leaders-table tbody");
         
         this.buildGrid();
     }
     
     buildGrid() {
+        if (this.tilesLayer.parentElement !== this.boardEl) {
+            this.boardEl.appendChild(this.tilesLayer);
+        }
+        
         this.boardEl.querySelectorAll(".cell").forEach(n => n.remove());
         for (let r = 0; r < SIZE; r++) {
             for (let c = 0; c < SIZE; c++) {
                 this.boardEl.insertBefore(
-                    el("div", { className: "cell" }),
+                    el("div", {
+                        className: "cell",
+                        "data-row": String(r),
+                        "data-col": String(c)
+                    }),
                     this.tilesLayer
                 );
             }
@@ -82,7 +107,8 @@ class Game2048 {
         const [r, c] = cell;
         b[r][c] = {
             id: uid(),
-            v: Math.random() < 0.9 ? 2 : 4
+            v: Math.random() < 0.9 ? 2 : 4,
+            spawn: true
         };
         return true;
     }
@@ -116,6 +142,7 @@ class Game2048 {
                 let node = this.tileDom.get(t.id);
                 
                 if (!node) {
+                    if (this.animating) continue;
                     node = el("div", { className: `tile v${t.v}` });
                     node.style.width = size + "px";
                     node.style.height = size + "px";
@@ -123,6 +150,15 @@ class Game2048 {
                     node.style.setProperty("--y", y + "px");
                     node.textContent = String(t.v);
                     this.tilesLayer.appendChild(node);
+                    
+                    if (t.spawn) {
+                        node.classList.add("spawn");
+                        t.spawn = false;
+                    } else if (t.merge) {
+                        node.classList.add("merge");
+                        t.merge = false;
+                    }
+                    
                     this.tileDom.set(t.id, node);
                 } else {
                     node.style.width = size + "px";
@@ -131,15 +167,22 @@ class Game2048 {
                     node.style.setProperty("--y", y + "px");
                     node.className = `tile v${t.v}`;
                     node.textContent = String(t.v);
+                    
+                    if (t.merge) {
+                        node.classList.add("merge");
+                        t.merge = false;
+                    }
                 }
                 seen.delete(t.id);
             }
         }
         
-        for (const id of seen) {
-            const n = this.tileDom.get(id);
-            if (n) n.remove();
-            this.tileDom.delete(id);
+        if (!this.animating) {
+            for (const id of seen) {
+                const n = this.tileDom.get(id);
+                if (n) n.remove();
+                this.tileDom.delete(id);
+            }
         }
         
         this.renderScore();
@@ -183,7 +226,8 @@ class Game2048 {
                     const nv = a.t.v * 2;
                     out[w] = {
                         id: uid(),
-                        v: nv
+                        v: nv,
+                        merge: true
                     };
                     gained += nv;
                     
@@ -246,6 +290,76 @@ class Game2048 {
         return false;
     }
     
+    animatePlan(plan, done) {
+        this.animating = true;
+        const updates = [];
+        
+        for (const m of plan) {
+            const n = this.tileDom.get(m.id);
+            if (!n) continue;
+            
+            const { x, y, size } = this.xyFor(m.to[0], m.to[1]);
+            n.style.width = size + "px";
+            n.style.height = size + "px";
+            n.style.setProperty("--x", x + "px");
+            n.style.setProperty("--y", y + "px");
+            updates.push({ node: n, remove: m.remove });
+        }
+        
+        setTimeout(() => {
+            for (const u of updates) {
+                if (u.remove) {
+                    if (u.node.parentNode) u.node.parentNode.removeChild(u.node);
+                    for (const [id, el] of this.tileDom.entries()) {
+                        if (el === u.node) this.tileDom.delete(id);
+                    }
+                }
+            }
+            this.animating = false;
+            done();
+        }, 200);
+    }
+    
+    loadLeaders() {
+        try {
+            const raw = localStorage.getItem(KEY_LEADERS);
+            const arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch {
+            return [];
+        }
+    }
+    
+    saveLeader(name, points) {
+        const arr = this.loadLeaders();
+        arr.push({
+            name: String(name || "Игрок").slice(0, 24),
+            score: Number(points) || 0,
+            ts: Date.now(),
+            date: new Date().toLocaleDateString('ru-RU')
+        });
+        arr.sort((a, b) => b.score - a.score || a.ts - b.ts);
+        localStorage.setItem(KEY_LEADERS, JSON.stringify(arr.slice(0, 10)));
+        this.renderLeaders();
+    }
+    
+    renderLeaders() {
+        while (this.leadersTable.firstChild) {
+            this.leadersTable.removeChild(this.leadersTable.firstChild);
+        }
+        
+        this.loadLeaders().forEach((rec, idx) => {
+            const row = el("tr");
+            row.innerHTML = `
+                <td>${idx + 1}</td>
+                <td>${rec.name}</td>
+                <td>${rec.score}</td>
+                <td>${rec.date}</td>
+            `;
+            this.leadersTable.appendChild(row);
+        });
+    }
+    
     saveGameState() {
         const gameState = {
             board: this.board,
@@ -276,6 +390,28 @@ class Game2048 {
         return false;
     }
     
+    finishGame() {
+        this.finalScoreEl.textContent = String(this.score);
+        this.playerNameInput.value = "";
+        this.saveSuccess.classList.add("hidden");
+        this.nameForm.classList.remove("hidden");
+        this.gameOverModal.classList.remove("hidden");
+        this.playerNameInput.focus();
+    }
+    
+    closeModal() {
+        this.gameOverModal.classList.add("hidden");
+    }
+    
+    showLeaders() {
+        this.renderLeaders();
+        this.leadersModal.classList.remove("hidden");
+    }
+    
+    hideLeaders() {
+        this.leadersModal.classList.add("hidden");
+    }
+    
     pushUndo() {
         this.undoStack.push({ b: this.cloneBoard(this.board), s: this.score });
         if (this.undoStack.length > 30) this.undoStack.shift();
@@ -284,7 +420,7 @@ class Game2048 {
     }
     
     undo() {
-        if (!this.undoStack.length) return;
+        if (!this.undoStack.length || this.animating) return;
         const prev = this.undoStack.pop();
         this.board = prev.b;
         this.score = prev.s;
@@ -307,9 +443,12 @@ class Game2048 {
         this.renderTiles();
         this.renderScore();
         this.saveGameState();
+        this.closeModal();
     }
     
     handleMove(dir) {
+        if (this.animating) return;
+        
         this.pushUndo();
         const res = this.moveWithPlan(this.board, dir);
         
@@ -319,8 +458,7 @@ class Game2048 {
             return;
         }
         
-        // Простая анимация перемещения
-        setTimeout(() => {
+        this.animatePlan(res.plan, () => {
             this.score += res.gained;
             if (this.score > this.best) {
                 this.best = this.score;
@@ -333,36 +471,45 @@ class Game2048 {
             this.saveGameState();
             
             if (!this.canMove(this.board)) {
-                alert("Игра окончена! Ваш счет: " + this.score);
-                this.newGame();
+                setTimeout(() => this.finishGame(), 300);
             }
-        }, 100);
+        });
     }
     
     setupEventListeners() {
         window.addEventListener("keydown", (e) => {
-            const k = e.key.toLowerCase();
-            if (k.startsWith("arrow")) e.preventDefault();
-            
-            if (k === 'arrowleft' || k === 'a') this.handleMove('left');
-            else if (k === 'arrowright' || k === 'd') this.handleMove('right');
-            else if (k === 'arrowup' || k === 'w') this.handleMove('up');
-            else if (k === 'arrowdown' || k === 's') this.handleMove('down');
+            if (this.gameOverModal.classList.contains("hidden") && 
+                this.leadersModal.classList.contains("hidden")) {
+                const k = e.key.toLowerCase();
+                if (k.startsWith("arrow")) e.preventDefault();
+                
+                if (k === 'arrowleft' || k === 'a') this.handleMove('left');
+                else if (k === 'arrowright' || k === 'd') this.handleMove('right');
+                else if (k === 'arrowup' || k === 'w') this.handleMove('up');
+                else if (k === 'arrowdown' || k === 's') this.handleMove('down');
+            }
         });
 
         this.btnNew.addEventListener("click", () => this.newGame());
         this.btnUndo.addEventListener("click", () => this.undo());
+        this.btnShowLeaders.addEventListener("click", () => this.showLeaders());
+        this.restartBtn.addEventListener("click", () => this.newGame());
 
         let touchStartX = 0;
         let touchStartY = 0;
 
         this.boardEl.addEventListener("touchstart", (e) => {
+            if (!this.gameOverModal.classList.contains("hidden") || 
+                !this.leadersModal.classList.contains("hidden")) return;
             const t = e.touches[0];
             touchStartX = t.clientX;
             touchStartY = t.clientY;
         }, { passive: true });
 
         this.boardEl.addEventListener("touchend", (e) => {
+            if (!this.gameOverModal.classList.contains("hidden") || 
+                !this.leadersModal.classList.contains("hidden")) return;
+            
             const t = e.changedTouches[0];
             const dx = t.clientX - touchStartX;
             const dy = t.clientY - touchStartY;
@@ -378,10 +525,37 @@ class Game2048 {
             }
         });
 
+        this.nameForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const playerName = (this.playerNameInput.value || "").trim() || "Игрок";
+            this.saveLeader(playerName, this.score);
+            this.nameForm.classList.add("hidden");
+            this.saveSuccess.classList.remove("hidden");
+            setTimeout(() => {
+                this.closeModal();
+                this.newGame();
+            }, 1500);
+        });
+
+        this.closeLeaders.addEventListener("click", () => this.hideLeaders());
+        this.closeLeadersBtn.addEventListener("click", () => this.hideLeaders());
+
+        [this.gameOverModal, this.leadersModal].forEach(modal => {
+            modal.addEventListener("click", (e) => {
+                if (e.target === modal) {
+                    if (modal === this.gameOverModal) {
+                        this.closeModal();
+                    } else {
+                        this.hideLeaders();
+                    }
+                }
+            });
+        });
+
         window.addEventListener("beforeunload", () => this.saveGameState());
     }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    new Game2048();
+    new FlowerFieldGame();
 });
