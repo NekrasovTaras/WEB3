@@ -34,7 +34,7 @@
                 
                 <div class="controls">
                     <button id="new-game" class="btn btn-primary">
-                        <span class="btn-icon">🌸</span>
+                        <span class="btn-icon"></span>
                         Новая игра
                     </button>
                     <button id="undo" class="btn btn-secondary" disabled>
@@ -42,7 +42,7 @@
                         Отменить ход
                     </button>
                     <button id="show-leaders" class="btn btn-secondary">
-                        <span class="btn-icon">🏆</span>
+                        <span class="btn-icon"></span>
                         Таблица лидеров
                     </button>
                 </div>
@@ -52,24 +52,24 @@
         <div id="game-over" class="modal hidden">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Игра окончена! 🌸</h2>
+                    <h2>Игра окончена!</h2>
                 </div>
                 <div class="modal-body">
                     <p class="final-score">Ваш счет: <span id="final-score">0</span></p>
                     <form id="name-form" class="name-form">
                         <input type="text" id="player-name" placeholder="Введите ваше имя" maxlength="20" required>
                         <button type="submit" class="btn btn-primary">
-                            <span class="btn-icon">💾</span>
+                            <span class="btn-icon"></span>
                             Сохранить результат
                         </button>
                     </form>
                     <div id="save-success" class="save-success hidden">
-                        <p>✅ Ваш рекорд сохранен!</p>
+                        <p>Ваш рекорд сохранен!</p>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button id="restart" class="btn btn-secondary">
-                        <span class="btn-icon">🔄</span>
+                        <span class="btn-icon"></span>
                         Начать заново
                     </button>
                 </div>
@@ -79,7 +79,7 @@
         <div id="leaders-modal" class="modal hidden">
             <div class="modal-content leaders-content">
                 <div class="modal-header">
-                    <h2>🏆 Таблица лидеров</h2>
+                    <h2>Таблица лидеров</h2>
                     <button id="close-leaders" class="close-btn">×</button>
                 </div>
                 <div class="leaders-list">

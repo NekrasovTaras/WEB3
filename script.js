@@ -29,7 +29,6 @@ class FlowerFieldGame {
         this.best = Number(localStorage.getItem(KEY_BEST) || 0);
         this.undoStack = [];
         this.animating = false;
-        
         this.tileDom = new Map();
         
         this.initializeElements();
@@ -97,8 +96,7 @@ class FlowerFieldGame {
                 if (!b[r][c]) empty.push([r, c]);
             }
         }
-        if (empty.length === 0) return null;
-        return empty[Math.floor(Math.random() * empty.length)];
+        return empty.length > 0 ? empty[Math.floor(Math.random() * empty.length)] : null;
     }
     
     spawnRandom(b) {
@@ -317,14 +315,14 @@ class FlowerFieldGame {
             }
             this.animating = false;
             done();
-        }, 200);
+        }, 160);
     }
     
     loadLeaders() {
         try {
             const raw = localStorage.getItem(KEY_LEADERS);
             const arr = raw ? JSON.parse(raw) : [];
-            return Array.isArray(arr) ? arr : [];
+            return Array.isArray(arr) ? arr.filter(rec => rec && rec.name && rec.score) : [];
         } catch {
             return [];
         }
@@ -332,14 +330,22 @@ class FlowerFieldGame {
     
     saveLeader(name, points) {
         const arr = this.loadLeaders();
+        const cleanName = String(name || "Игрок").trim().slice(0, 24) || "Игрок";
+        const score = Number(points) || 0;
+        
         arr.push({
-            name: String(name || "Игрок").slice(0, 24),
-            score: Number(points) || 0,
+            name: cleanName,
+            score: score,
             ts: Date.now(),
             date: new Date().toLocaleDateString('ru-RU')
         });
+        
         arr.sort((a, b) => b.score - a.score || a.ts - b.ts);
-        localStorage.setItem(KEY_LEADERS, JSON.stringify(arr.slice(0, 10)));
+        const uniqueLeaders = arr.filter((rec, idx, self) => 
+            idx === self.findIndex(r => r.name === rec.name && r.score === rec.score)
+        );
+        
+        localStorage.setItem(KEY_LEADERS, JSON.stringify(uniqueLeaders.slice(0, 10)));
         this.renderLeaders();
     }
     
@@ -348,7 +354,15 @@ class FlowerFieldGame {
             this.leadersTable.removeChild(this.leadersTable.firstChild);
         }
         
-        this.loadLeaders().forEach((rec, idx) => {
+        const leaders = this.loadLeaders();
+        if (leaders.length === 0) {
+            const row = el("tr");
+            row.innerHTML = `<td colspan="4" style="text-align: center; color: var(--text-light);">Пока нет записей</td>`;
+            this.leadersTable.appendChild(row);
+            return;
+        }
+        
+        leaders.forEach((rec, idx) => {
             const row = el("tr");
             row.innerHTML = `
                 <td>${idx + 1}</td>
@@ -365,9 +379,13 @@ class FlowerFieldGame {
             board: this.board,
             score: this.score,
             best: this.best,
-            undoStack: this.undoStack
+            undoStack: this.undoStack.slice(-20)
         };
-        localStorage.setItem(KEY_STATE, JSON.stringify(gameState));
+        try {
+            localStorage.setItem(KEY_STATE, JSON.stringify(gameState));
+        } catch (e) {
+            console.warn("Failed to save game state:", e);
+        }
     }
     
     loadGameState() {
@@ -375,10 +393,10 @@ class FlowerFieldGame {
             const saved = localStorage.getItem(KEY_STATE);
             if (saved) {
                 const state = JSON.parse(saved);
-                this.board = state.board || this.makeEmptyBoard();
-                this.score = state.score || 0;
-                this.best = state.best || 0;
-                this.undoStack = state.undoStack || [];
+                this.board = state.board && Array.isArray(state.board) ? state.board : this.makeEmptyBoard();
+                this.score = Number(state.score) || 0;
+                this.best = Number(state.best) || 0;
+                this.undoStack = Array.isArray(state.undoStack) ? state.undoStack : [];
                 this.btnUndo.disabled = this.undoStack.length === 0;
                 this.renderTiles();
                 this.renderScore();
@@ -396,7 +414,7 @@ class FlowerFieldGame {
         this.saveSuccess.classList.add("hidden");
         this.nameForm.classList.remove("hidden");
         this.gameOverModal.classList.remove("hidden");
-        this.playerNameInput.focus();
+        setTimeout(() => this.playerNameInput.focus(), 100);
     }
     
     closeModal() {
@@ -414,8 +432,8 @@ class FlowerFieldGame {
     
     pushUndo() {
         this.undoStack.push({ b: this.cloneBoard(this.board), s: this.score });
-        if (this.undoStack.length > 30) this.undoStack.shift();
-        this.btnUndo.disabled = false;
+        if (this.undoStack.length > 20) this.undoStack.shift();
+        this.btnUndo.disabled = this.undoStack.length === 0;
         this.saveGameState();
     }
     
@@ -471,7 +489,7 @@ class FlowerFieldGame {
             this.saveGameState();
             
             if (!this.canMove(this.board)) {
-                setTimeout(() => this.finishGame(), 300);
+                setTimeout(() => this.finishGame(), 200);
             }
         });
     }
@@ -516,7 +534,7 @@ class FlowerFieldGame {
             const ax = Math.abs(dx);
             const ay = Math.abs(dy);
             
-            if (Math.max(ax, ay) < 24) return;
+            if (Math.max(ax, ay) < 20) return;
             
             if (ax > ay) {
                 this.handleMove(dx > 0 ? 'right' : 'left');
@@ -527,14 +545,16 @@ class FlowerFieldGame {
 
         this.nameForm.addEventListener("submit", (e) => {
             e.preventDefault();
-            const playerName = (this.playerNameInput.value || "").trim() || "Игрок";
-            this.saveLeader(playerName, this.score);
-            this.nameForm.classList.add("hidden");
-            this.saveSuccess.classList.remove("hidden");
-            setTimeout(() => {
-                this.closeModal();
-                this.newGame();
-            }, 1500);
+            const playerName = (this.playerNameInput.value || "").trim();
+            if (playerName) {
+                this.saveLeader(playerName, this.score);
+                this.nameForm.classList.add("hidden");
+                this.saveSuccess.classList.remove("hidden");
+                setTimeout(() => {
+                    this.closeModal();
+                    this.newGame();
+                }, 1200);
+            }
         });
 
         this.closeLeaders.addEventListener("click", () => this.hideLeaders());
@@ -553,6 +573,10 @@ class FlowerFieldGame {
         });
 
         window.addEventListener("beforeunload", () => this.saveGameState());
+        
+        window.addEventListener("resize", () => {
+            this.renderTiles();
+        });
     }
 }
 
